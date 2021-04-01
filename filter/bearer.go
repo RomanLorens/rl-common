@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/RomanLorens/logger/log"
+	"github.com/RomanLorens/rl-common/hash"
 )
 
 // WhiteList white list config
@@ -30,34 +31,15 @@ type BearerTokenIPFilter struct {
 	ips    map[string]*WhiteList
 }
 
-//WhiteListedEndpointFilter whitelisted endpoints
-type WhiteListedEndpointFilter struct {
-	endpoints []string
-}
-
-func NewWhiteListedEndpointFilter(endpoints []string) *WhiteListedEndpointFilter {
-	return &WhiteListedEndpointFilter{endpoints: endpoints}
-}
-
 //NewBearerTokenIPFilter creates filter
 func NewBearerTokenIPFilter(l log.Logger, cfg []WhiteList) *BearerTokenIPFilter {
 	tokens := make(map[string]*WhiteList)
 	ips := make(map[string]*WhiteList)
 	for _, c := range cfg {
-		tokens[c.Token] = &c
+		tokens[c.User] = &c
 		ips[c.IP] = &c
 	}
 	return &BearerTokenIPFilter{logger: l, tokens: tokens, ips: ips}
-}
-
-//DoFilter checks if url is whitelisted
-func (f WhiteListedEndpointFilter) DoFilter(r *http.Request) (bool, *http.Request) {
-	for _, e := range f.endpoints {
-		if strings.Contains(r.URL.String(), e) {
-			return true, r
-		}
-	}
-	return false, r
 }
 
 //DoFilter authenticate by authorization bearer token or ip
@@ -69,36 +51,52 @@ func (f BearerTokenIPFilter) DoFilter(r *http.Request) (bool, *http.Request) {
 	bt := bearerToken(r)
 	var ipcfg *WhiteList
 	if bt != "" {
-		f.logger.Info(r.Context(), "AuthenticatedIPFilter checking bearer token in whitelist")
-		ipcfg = f.tokens[bt]
-	} else {
-		f.logger.Info(r.Context(), "AuthenticatedIPFilter checking ip address %v in whitelist", r.RemoteAddr)
-		ipcfg = f.ips[strings.Split(r.RemoteAddr, ":")[0]]
-	}
-	if ipcfg == nil {
-		f.logger.Error(r.Context(), fmt.Sprintf("%v NOT whitelisted ip", r.RemoteAddr))
-		return false, r
+		f.logger.Info(r.Context(), "BearerTokenIPFilter checking bearer token in whitelist")
+		t := strings.Split(bt, "-")
+		if len(t) > 0 {
+			ipcfg = f.tokens[t[0]]
+			if ipcfg != nil {
+				ok := hash.Verfify(t[1], ipcfg.Token)
+				if !ok {
+					f.logger.Error(r.Context(), "Invalid bearer token '%v'", bt)
+					return false, r
+				}
+			} else {
+				f.logger.Error(r.Context(), "Missing whitelist cfg for user '%v'", t[0])
+			}
+		} else {
+			f.logger.Error(r.Context(), "Invalid bearer format '%v'", bt)
+		}
 	}
 
-	isAuthed := false
+	if ipcfg == nil {
+		f.logger.Info(r.Context(), "BearerTokenIPFilter checking ip address %v in whitelist", r.RemoteAddr)
+		ipcfg = f.ips[strings.Split(r.RemoteAddr, ":")[0]]
+		if ipcfg == nil {
+			f.logger.Error(r.Context(), fmt.Sprintf("%v NOT whitelisted ip", r.RemoteAddr))
+			return false, r
+		}
+	}
+
+	isAuthorized := false
 	if !ipcfg.IsAdmin {
 		for _, url := range ipcfg.Endpoints {
 			if strings.Contains(r.URL.String(), url) {
-				isAuthed = true
+				isAuthorized = true
 				break
 			}
 		}
 	} else {
-		isAuthed = true
+		isAuthorized = true
 	}
 
-	if !isAuthed {
-		f.logger.Error(r.Context(), fmt.Sprintf("ip address not authenticated as admin to endpoint %v", r.URL.String()))
+	if !isAuthorized {
+		f.logger.Error(r.Context(), fmt.Sprintf("user '%v' not authorized to endpoint %v, ip = '%v'", ipcfg.User, r.URL.String(), r.RemoteAddr))
 		return false, r
 	}
 	ctx := context.WithValue(r.Context(), log.UserKey, ipcfg.User+"-ip")
 	r = r.WithContext(ctx)
-	f.logger.Info(r.Context(), fmt.Sprintf("%v is whitelisted - user %v", r.RemoteAddr, ipcfg.User))
+	f.logger.Info(r.Context(), fmt.Sprintf("'%v' is whitelisted for user '%v'", r.RemoteAddr, ipcfg.User))
 	return true, r
 }
 
@@ -112,4 +110,8 @@ func bearerToken(r *http.Request) string {
 		return b[1]
 	}
 	return ""
+}
+
+func (w WhiteList) String() string {
+	return fmt.Sprintf("{user: '%v', ip: '%v', token: '%v', admin: %v, endpoints: %v}", w.User, w.IP, w.Token, w.IsAdmin, w.Endpoints)
 }
