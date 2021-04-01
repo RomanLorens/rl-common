@@ -30,6 +30,15 @@ type BearerTokenIPFilter struct {
 	ips    map[string]*WhiteList
 }
 
+//WhiteListedEndpointFilter whitelisted endpoints
+type WhiteListedEndpointFilter struct {
+	endpoints []string
+}
+
+func NewWhiteListedEndpointFilter(endpoints []string) *WhiteListedEndpointFilter {
+	return &WhiteListedEndpointFilter{endpoints: endpoints}
+}
+
 //NewBearerTokenIPFilter creates filter
 func NewBearerTokenIPFilter(l log.Logger, cfg []WhiteList) *BearerTokenIPFilter {
 	tokens := make(map[string]*WhiteList)
@@ -39,6 +48,16 @@ func NewBearerTokenIPFilter(l log.Logger, cfg []WhiteList) *BearerTokenIPFilter 
 		ips[c.IP] = &c
 	}
 	return &BearerTokenIPFilter{logger: l, tokens: tokens, ips: ips}
+}
+
+//DoFilter checks if url is whitelisted
+func (f WhiteListedEndpointFilter) DoFilter(r *http.Request) (bool, *http.Request) {
+	for _, e := range f.endpoints {
+		if strings.Contains(r.URL.String(), e) {
+			return true, r
+		}
+	}
+	return false, r
 }
 
 //DoFilter authenticate by authorization bearer token or ip
