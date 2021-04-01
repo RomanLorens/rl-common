@@ -44,3 +44,15 @@ func TestIP(t *testing.T) {
 		t.Errorf("Failed %v", ok)
 	}
 }
+
+func TestNotAdminIP(t *testing.T) {
+	l := log.PrintLogger()
+	cfg := []WhiteList{{User: "user1", IP: "192.0.2.1", IsAdmin: false, Endpoints: []string{"/test"}}}
+	f := NewBearerTokenIPFilter(l, cfg)
+	r := httptest.NewRequest("GET", "http://192.0.2.1/test", nil)
+
+	ok, r := f.DoFilter(r)
+	if !ok {
+		t.Errorf("Failed %v", ok)
+	}
+}
