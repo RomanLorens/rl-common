@@ -35,9 +35,9 @@ type BearerTokenIPFilter struct {
 func NewBearerTokenIPFilter(l log.Logger, cfg []WhiteList) *BearerTokenIPFilter {
 	tokens := make(map[string]*WhiteList)
 	ips := make(map[string]*WhiteList)
-	for _, c := range cfg {
-		tokens[c.User] = &c
-		ips[c.IP] = &c
+	for i, c := range cfg {
+		tokens[c.User] = &cfg[i]
+		ips[c.IP] = &cfg[i]
 	}
 	return &BearerTokenIPFilter{logger: l, tokens: tokens, ips: ips}
 }
