@@ -5,7 +5,7 @@ import (
 )
 
 func TestEncrypt(t *testing.T) {
-	_, err := Encrypt("boom")
+	_, err := Encrypt("a6843639-59ed-41bd-97c6-1187348e2f50")
 	if err != nil {
 		t.Errorf("Failed %v", err)
 	}

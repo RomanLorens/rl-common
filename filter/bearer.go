@@ -56,7 +56,7 @@ func (f BearerTokenIPFilter) DoFilter(r *http.Request) (bool, *http.Request) {
 		if len(t) > 0 {
 			ipcfg = f.tokens[t[0]]
 			if ipcfg != nil {
-				ok := hash.Verfify(t[1], ipcfg.Token)
+				ok := hash.Verfify(strings.Join(t[1:], "-"), ipcfg.Token)
 				if !ok {
 					f.logger.Error(r.Context(), "Invalid bearer token '%v'", bt)
 					return false, r
